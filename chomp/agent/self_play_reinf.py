@@ -1,3 +1,5 @@
+import os
+
 import h5py
 
 from chomp.OnePlane import OnePlane
@@ -11,26 +13,29 @@ from keras.layers.core import Dense, Dropout
 from keras.layers import Conv2D, Flatten, MaxPooling2D
 from chomp.agent.pg import PolicyAgent
 
-def simulate_game(alice, bob):
+def simulate_game(alice, bob, BOARD_WIDTH, BOARD_HEIGHT):
     #black= 1st, white = second
-    BOARD_SIZE = 2
-    game = GameState.new_game(BOARD_SIZE, BOARD_SIZE)
+    #BOARD_SIZE = 2
+    game = GameState.new_game(row_size = BOARD_HEIGHT, col_size = BOARD_WIDTH)
     agents = {Player.alice: alice, Player.bob: bob}
 
     #Test
     #print("test")
     #print(game.board.grid)
+    i = 0
 
     while not game.is_over():
         next_move = agents[game.next_player].select_move(game)
+        if i == 0:
+            first_move = next_move
         #game = game.apply_move(next_move)
         game.apply_move(next_move)
+        i = i + 1
+    return game.get_winner(), first_move
 
-    return game.get_winner()
+def base_model(BOARD_WIDTH, BOARD_HEIGHT):
 
-def base_model():
-    size = 2
-    input_shape = (size, size, 1)
+    input_shape = (BOARD_HEIGHT, BOARD_WIDTH,  1)
     model = Sequential()
     model.add(Conv2D(48, kernel_size=(3,3),  activation='relu', padding = 'same',input_shape = input_shape ) )
     model.add(Dropout(rate=0.5))
@@ -40,11 +45,11 @@ def base_model():
     model.add(Flatten())
     model.add(Dense(512, activation='relu'))
     model.add(Dropout(rate=0.5))
-    model.add(Dense(size * size, activation='softmax'))
+    model.add(Dense(BOARD_WIDTH * BOARD_HEIGHT, activation='softmax'))
     #model.summary()
     return model
 
-def generate_experience(iteration, num_games = 1000):
+def generate_experience(iteration, BOARD_WIDTH, BOARD_HEIGHT, num_games = 1000):
     #Test filename
     # bots = {Player.alice: naive.RandomBot(), Player.bob: naive.RandomBot()}
 
@@ -55,9 +60,9 @@ def generate_experience(iteration, num_games = 1000):
         agent2 = PolicyAgent.load_policy_agent(f)
         #agent2 = naive.RandomBot()
     else:
-        game_encoder = OnePlane(2)
-        agent1 = PolicyAgent(game_encoder, base_model())
-        agent2 = PolicyAgent(game_encoder, base_model())
+        game_encoder = OnePlane(BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT)
+        agent1 = PolicyAgent(game_encoder, base_model(BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT))
+        agent2 = PolicyAgent(game_encoder, base_model(BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT))
 
 
     collector1 = ExperienceCollector()
@@ -74,7 +79,7 @@ def generate_experience(iteration, num_games = 1000):
         #print("lion")
         #agent1.model.summary()
 
-        game_record = simulate_game(agent1, agent2)
+        game_record = simulate_game(agent1, agent2, BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT)
 
         if game_record == Player.alice:
             collector1.complete_episode(reward = 1)
@@ -94,7 +99,7 @@ def generate_experience(iteration, num_games = 1000):
     with h5py.File(experience_filename, 'w') as experience_outf:
         experience.serialize(experience_outf)
 
-def learn_from_experience(iteration):
+def learn_from_experience(iteration, BOARD_WIDTH, BOARD_HEIGHT):
 
     #Sets defaults here
     batch_size = 32
@@ -105,8 +110,7 @@ def learn_from_experience(iteration):
     exp_filename = '/Users/andrew/Desktop/chomp_proj/chomp/agent/experience' + str(iteration) +'.hdf5'
 
     if iteration == 0:
-        BOARD_SIZE = 2
-        learning_agent = PolicyAgent(OnePlane(BOARD_SIZE), base_model())
+        learning_agent = PolicyAgent(OnePlane(BOARD_WIDTH, BOARD_HEIGHT), base_model(BOARD_WIDTH, BOARD_HEIGHT))
     else:
         agent_filename = 'agent' + str(iteration - 1) + '.hdf5'
         learning_agent = PolicyAgent.load_policy_agent(h5py.File(agent_filename))
@@ -128,12 +132,12 @@ def learn_from_experience(iteration):
     with h5py.File(updated_agent_filename, 'w') as updated_agent_outf:
         learning_agent.serialize(updated_agent_outf)
 
-def compute_self_play_stats(iteration, num_games = 10000):
+def compute_self_play_stats(iteration, BOARD_WIDTH, BOARD_HEIGHT,  num_games = 10000):
     agent_filename = 'agent' + str(iteration) + '.hdf5'
 
+
     if iteration == 0:
-        BOARD_SIZE = 2
-        learning_agent = PolicyAgent(OnePlane(BOARD_SIZE), base_model())
+        learning_agent = PolicyAgent(OnePlane(BOARD_WIDTH, BOARD_HEIGHT), base_model(BOARD_WIDTH, BOARD_HEIGHT))
     else:
         learning_agent = PolicyAgent.load_policy_agent(h5py.File(agent_filename))
 
@@ -141,36 +145,58 @@ def compute_self_play_stats(iteration, num_games = 10000):
 
     for i in range(num_games):
 
-        game_record = simulate_game(learning_agent, learning_agent)
+        game_record, first_move = simulate_game(learning_agent, learning_agent, BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT)
 
         if game_record == Player.alice:
             win_record[Player.alice] += 1
         else:
             win_record[Player.bob] += 1
 
-    return (win_record[Player.alice], win_record[Player.bob])
+    return (win_record[Player.alice], win_record[Player.bob], first_move)
     #print("Alice wins: " + str(win_record[Player.alice]))
     #print("Bob wins: " + str(win_record[Player.bob]))
 
-def learning_cycle(cycles = 100):
+def learning_cycle(BOARD_WIDTH, BOARD_HEIGHT, cycles):
     results = {}
 
     for i in range(cycles):
         if i == 0:
-            generate_experience(iteration = i)
-            learn_from_experience(iteration = i)
-            results[i] = compute_self_play_stats(iteration = i)
+            generate_experience(BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT, iteration = i)
+            learn_from_experience(BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT, iteration = i)
+            results[i] = compute_self_play_stats(iteration = i, BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT)
         else:
-            generate_experience(iteration = i)
-            learn_from_experience(iteration = i)
-            results[i] = compute_self_play_stats(iteration = i)
+            generate_experience(BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT, iteration = i)
+            learn_from_experience(BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT, iteration = i)
+            results[i] = compute_self_play_stats(iteration = i, BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT)
 
     print(results)
+    for i in range(len(results)):
+        print(str(i) + ": ", end="")
+        (results[i][2]).print_mov()
+
+
+    #myfile = 'results.txt'
+    #with open(myfile, 'w') as f:
+        #for key, value in a.items():
+            #f.write('%s:%s\n' % (key, value))
+
+
+
+def clean_directory():
+    path = '/Users/andrew/Desktop/chomp_proj/chomp/agent'
+    dir = os.listdir(path)
+    i = 0
+    for file in dir:
+        if file.endswith('hdf5'):
+            os.remove(file)
+
 
 
 
 if __name__ == '__main__':
-	#generate_experience(10)
-    #learn_from_experience()
-    #compute_self_play_stats(is_default=True, learning_agent_filename=None, num_games=10000)
-    learning_cycle(cycles=50)
+
+
+    #learning_cycle(BOARD_WIDTH = 4, BOARD_HEIGHT = 5, cycles=50)
+    #learning_cycle(BOARD_WIDTH=4, BOARD_HEIGHT=5, cycles=50)
+    learning_cycle(BOARD_WIDTH=10, BOARD_HEIGHT=10, cycles=50)
+    #clean_directory()
