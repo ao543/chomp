@@ -34,8 +34,8 @@ class PolicyAgent(Agent):
         encoder_name = h5file['encoder'].attrs['name']
         board_width = h5file['encoder'].attrs['board_width']
         board_height = h5file['encoder'].attrs['board_height']
-        encoder = OnePlane(2)
-        #encoder = OnePlane(board_width)
+        #encoder = OnePlane(2)
+        encoder = OnePlane(board_width, board_height)
         return PolicyAgent(encoder, model)
 
 

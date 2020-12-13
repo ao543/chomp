@@ -13,7 +13,7 @@ from keras.layers.core import Dense, Dropout
 from keras.layers import Conv2D, Flatten, MaxPooling2D
 from chomp.agent.pg import PolicyAgent
 
-def simulate_game(alice, bob, BOARD_WIDTH, BOARD_HEIGHT):
+def simulate_game(alice, bob, BOARD_WIDTH, BOARD_HEIGHT, first_move=False):
     #black= 1st, white = second
     #BOARD_SIZE = 2
     game = GameState.new_game(row_size = BOARD_HEIGHT, col_size = BOARD_WIDTH)
@@ -31,7 +31,10 @@ def simulate_game(alice, bob, BOARD_WIDTH, BOARD_HEIGHT):
         #game = game.apply_move(next_move)
         game.apply_move(next_move)
         i = i + 1
-    return game.get_winner(), first_move
+
+    if first_move:
+        return game.get_winner(), first_move
+    return game.get_winner()
 
 def base_model(BOARD_WIDTH, BOARD_HEIGHT):
 
@@ -103,8 +106,10 @@ def learn_from_experience(iteration, BOARD_WIDTH, BOARD_HEIGHT):
 
     #Sets defaults here
     batch_size = 32
+    #learning_rate = .00001
     learning_rate = .0001
-    #look into below
+
+
     clipnorm = 1.0
     updated_agent_filename = 'agent' + str(iteration) + '.hdf5'
     exp_filename = '/Users/andrew/Desktop/chomp_proj/chomp/agent/experience' + str(iteration) +'.hdf5'
@@ -142,17 +147,22 @@ def compute_self_play_stats(iteration, BOARD_WIDTH, BOARD_HEIGHT,  num_games = 1
         learning_agent = PolicyAgent.load_policy_agent(h5py.File(agent_filename))
 
     win_record = {Player.alice: 0, Player.bob: 0}
+    first_move_count = 0
 
     for i in range(num_games):
 
-        game_record, first_move = simulate_game(learning_agent, learning_agent, BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT)
+        game_record, first_move = simulate_game(learning_agent,learning_agent, BOARD_WIDTH = BOARD_WIDTH,
+                                                BOARD_HEIGHT = BOARD_HEIGHT, first_move=True)
 
         if game_record == Player.alice:
             win_record[Player.alice] += 1
         else:
             win_record[Player.bob] += 1
 
-    return (win_record[Player.alice], win_record[Player.bob], first_move)
+        if (BOARD_HEIGHT - 2 == first_move.row and first_move.col ==1):
+            first_move_count = first_move_count + 1
+
+    return (win_record[Player.alice], win_record[Player.bob], first_move_count)
     #print("Alice wins: " + str(win_record[Player.alice]))
     #print("Bob wins: " + str(win_record[Player.bob]))
 
@@ -170,9 +180,9 @@ def learning_cycle(BOARD_WIDTH, BOARD_HEIGHT, cycles):
             results[i] = compute_self_play_stats(iteration = i, BOARD_WIDTH = BOARD_WIDTH, BOARD_HEIGHT = BOARD_HEIGHT)
 
     print(results)
-    for i in range(len(results)):
-        print(str(i) + ": ", end="")
-        (results[i][2]).print_mov()
+    #for i in range(len(results)):
+        #print(str(i) + ": ", end="")
+        #(results[i][2]).print_mov()
 
 
     #myfile = 'results.txt'
@@ -195,8 +205,6 @@ def clean_directory():
 
 if __name__ == '__main__':
 
-
-    #learning_cycle(BOARD_WIDTH = 4, BOARD_HEIGHT = 5, cycles=50)
     #learning_cycle(BOARD_WIDTH=4, BOARD_HEIGHT=5, cycles=50)
-    learning_cycle(BOARD_WIDTH=10, BOARD_HEIGHT=10, cycles=50)
-    #clean_directory()
+    #learning_cycle(BOARD_WIDTH=2, BOARD_HEIGHT=2, cycles=50)
+    clean_directory()
