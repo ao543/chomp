@@ -21,6 +21,7 @@ def save_model_to_hdf5_group(model, f):
         root_item = serialized_model.get('/')
         serialized_model.copy(root_item, f, 'kerasmodel')
         serialized_model.close()
+
     finally:
         os.unlink(tempfname)
 

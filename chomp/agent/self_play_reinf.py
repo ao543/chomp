@@ -1,4 +1,5 @@
 import os
+import random
 
 import h5py
 
@@ -12,6 +13,7 @@ from keras.models import Sequential
 from keras.layers.core import Dense, Dropout
 from keras.layers import Conv2D, Flatten, MaxPooling2D
 from chomp.agent.pg import PolicyAgent
+from tensorflow import set_random_seed
 
 def simulate_game(alice, bob, BOARD_WIDTH, BOARD_HEIGHT, first_move=False):
     #black= 1st, white = second
@@ -25,16 +27,29 @@ def simulate_game(alice, bob, BOARD_WIDTH, BOARD_HEIGHT, first_move=False):
     i = 0
 
     while not game.is_over():
-        next_move = agents[game.next_player].select_move(game)
-        if i == 0:
-            first_move = next_move
+
+        #test
+        #print(game.next_player)
+
+        if i % 2 == 0:
+            next_move = agents[Player.alice].select_move(game)
+        else:
+            next_move = agents[Player.bob].select_move(game)
+
+        #if i == 0:
+            #first_move = next_move
         #game = game.apply_move(next_move)
         game.apply_move(next_move)
         i = i + 1
 
     if first_move:
         return game.get_winner(), first_move
-    return game.get_winner()
+
+    if i % 2 == 0:
+        return Player.alice
+    else:
+        return Player.bob
+    #return game.get_winner()
 
 def base_model(BOARD_WIDTH, BOARD_HEIGHT):
 
@@ -106,13 +121,15 @@ def learn_from_experience(iteration, BOARD_WIDTH, BOARD_HEIGHT):
 
     #Sets defaults here
     batch_size = 32
+    #batch_size = 224
     #learning_rate = .00001
     learning_rate = .0001
+    #learning_rate = .001
 
 
     clipnorm = 1.0
     updated_agent_filename = 'agent' + str(iteration) + '.hdf5'
-    exp_filename = '/Users/andrew/Desktop/chomp_proj/chomp/agent/experience' + str(iteration) +'.hdf5'
+    exp_filename = '/Users/andrew/Desktop/obrien_rl_project/chomp_proj/chomp/agent/experience' + str(iteration) +'.hdf5'
 
     if iteration == 0:
         learning_agent = PolicyAgent(OnePlane(BOARD_WIDTH, BOARD_HEIGHT), base_model(BOARD_WIDTH, BOARD_HEIGHT))
@@ -151,22 +168,27 @@ def compute_self_play_stats(iteration, BOARD_WIDTH, BOARD_HEIGHT,  num_games = 1
 
     for i in range(num_games):
 
-        game_record, first_move = simulate_game(learning_agent,learning_agent, BOARD_WIDTH = BOARD_WIDTH,
-                                                BOARD_HEIGHT = BOARD_HEIGHT, first_move=True)
+        game_record = simulate_game(learning_agent,learning_agent, BOARD_WIDTH = BOARD_WIDTH,
+                                                BOARD_HEIGHT = BOARD_HEIGHT, first_move=False)
 
         if game_record == Player.alice:
             win_record[Player.alice] += 1
         else:
             win_record[Player.bob] += 1
 
-        if (BOARD_HEIGHT - 2 == first_move.row and first_move.col ==1):
-            first_move_count = first_move_count + 1
+        #if (BOARD_HEIGHT - 2 == first_move.row and first_move.col ==1):
+            #first_move_count = first_move_count + 1
 
-    return (win_record[Player.alice], win_record[Player.bob], first_move_count)
+    #print("test")
+    #print(win_record[Player.alice])
+    #print(win_record[Player.bob])
+
+    return (win_record[Player.alice], win_record[Player.bob])
+    #, first_move_count
     #print("Alice wins: " + str(win_record[Player.alice]))
     #print("Bob wins: " + str(win_record[Player.bob]))
 
-def learning_cycle(BOARD_WIDTH, BOARD_HEIGHT, cycles):
+def learning_cycle(BOARD_WIDTH, BOARD_HEIGHT, cycles, output_file = 'exp1.txt'):
     results = {}
 
     for i in range(cycles):
@@ -185,26 +207,48 @@ def learning_cycle(BOARD_WIDTH, BOARD_HEIGHT, cycles):
         #(results[i][2]).print_mov()
 
 
-    #myfile = 'results.txt'
-    #with open(myfile, 'w') as f:
+    myfile = output_file
+    with open(myfile, 'w') as f:
         #for key, value in a.items():
-            #f.write('%s:%s\n' % (key, value))
+        f.write(str(results))
 
 
 
 def clean_directory():
-    path = '/Users/andrew/Desktop/chomp_proj/chomp/agent'
+    path = '/Users/andrew/Desktop/obrien_rl_project/chomp_proj/chomp/agent'
     dir = os.listdir(path)
     i = 0
     for file in dir:
         if file.endswith('hdf5'):
             os.remove(file)
 
+def experiment_1():
+    #Tests for random convergence
+    dim_list = [(random.randint(1,10), random.randint(1,10)), (random.randint(1,10),random.randint(1,10)),(random.randint(1,10), random.randint(1,10))]
 
+    dim1 = dim_list[0]
+    dim2 = dim_list[1]
+    dim3 = dim_list[2]
+    #print(dim1)
+    #print(dim2)
+    #print(dim3)
+    f = open("exp1.txt", "r+")
+    f.truncate()
+    learning_cycle(BOARD_WIDTH= dim1[0], BOARD_HEIGHT=dim1[1], cycles=2, output_file='exp1.txt')
+    clean_directory()
+    learning_cycle(BOARD_WIDTH=dim2[0], BOARD_HEIGHT=dim2[1], cycles=2, output_file='exp1.txt')
+    clean_directory()
+    learning_cycle(BOARD_WIDTH=dim3[0], BOARD_HEIGHT=dim3[1], cycles=2, output_file='exp1.txt')
 
 
 if __name__ == '__main__':
-
+    random.seed(34)
+    np.random.seed(34)
+    set_random_seed(34)
     #learning_cycle(BOARD_WIDTH=4, BOARD_HEIGHT=5, cycles=50)
     #learning_cycle(BOARD_WIDTH=2, BOARD_HEIGHT=2, cycles=50)
-    clean_directory()
+    #learning_cycle(BOARD_WIDTH=2, BOARD_HEIGHT=2, cycles=2, output_file = 'exp1.txt')
+    #clean_directory()
+    experiment_1()
+    #f = open("exp1.txt", "r+")
+    #f.truncate()

@@ -62,8 +62,8 @@ class GameState():
 
 	def apply_move(self, move):
 		self.board.make_move(move)
-		self.previous_player = self.previous_player.other
-		self.next_player = self.next_player.other
+		#self.previous_player = self.previous_player.other
+		#self.next_player = self.next_player.other
 
 	def clone(self):
 		#not sure about correct enum handling here
